@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Tree Health Dashboard</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background: #f4f6f8;
+        margin: 0;
+        padding: 20px;
+      }
+
+      h1 {
+        margin-bottom: 10px;
+      }
+
+      .card {
+        background: #fff;
+        border-radius: 10px;
+        padding: 16px;
+        margin-bottom: 16px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      }
+
+      .row {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+
+      .status {
+        font-weight: bold;
+        font-size: 18px;
+      }
+
+      .healthy {
+        color: green;
+      }
+      .unhealthy {
+        color: red;
+      }
+
+      .score {
+        font-size: 28px;
+        font-weight: bold;
+      }
+
+      .part-card {
+        width: 300px;
+        cursor: pointer;
+      }
+
+      .disease {
+        margin-left: 10px;
+      }
+
+      .badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        color: #fff;
+      }
+
+      .badge.green {
+        background: green;
+      }
+      .badge.red {
+        background: red;
+      }
+
+      a {
+        text-decoration: none;
+        color: #007bff;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🌴 Tree Health Dashboard</h1>
+
+    <div id="tree"></div>
+    <div class="row" id="parts"></div>
+
+    <script>
+      /* ----------------------------
+   INPUT JSON (replace later)
+----------------------------- */
+      const response = YOUR_JSON_RESPONSE_HERE;
+
+      /* ----------------------------
+   TREE DASHBOARD
+----------------------------- */
+      const tree = response.dashboard.tree;
+
+      document.getElementById("tree").innerHTML = `
+  <div class="card">
+    <h2>Overall Tree Status</h2>
+    <div class="status ${tree.health}">
+      ${tree.health.toUpperCase()}
+    </div>
+    <div class="score">${tree.score}%</div>
+    ${
+      tree.health === "unhealthy" && tree.primary_disease
+        ? `<p>Primary issue: <b>${tree.primary_disease}</b></p>`
+        : `<p>No dominant disease</p>`
+    }
+    <a href="${response.report_url}" target="_blank">View Detailed Report</a>
+  </div>
+`;
+
+      /* ----------------------------
+   PART DASHBOARDS
+----------------------------- */
+      const partsContainer = document.getElementById("parts");
+
+      Object.entries(response.dashboard.parts).forEach(([part, info]) => {
+        const badgeClass = info.health === "healthy" ? "green" : "red";
+
+        let diseasesHTML = "";
+        if (info.health === "unhealthy") {
+          diseasesHTML = Object.entries(info.diseases)
+            .map(
+              ([disease, percent]) =>
+                `<div class="disease">• ${disease} – ${percent}%</div>`
+            )
+            .join("");
+        }
+
+        partsContainer.innerHTML += `
+    <div class="card part-card">
+      <h3>${part.toUpperCase()}</h3>
+      <span class="badge ${badgeClass}">
+        ${info.health.toUpperCase()}
+      </span>
+      <p>Score: <b>${info.score}%</b></p>
+      <p>Frames: ${info.frames}</p>
+      ${diseasesHTML}
+    </div>
+  `;
+      });
+    </script>
+  </body>
+</html>

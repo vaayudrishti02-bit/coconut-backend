@@ -1,0 +1,132 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# =========================
+# Virtual environments
+# =========================
+.venv/
+venv/
+env/
+ENV/
+
+# =========================
+# Environment / secrets
+# =========================
+.env
+.env.*
+secrets.env
+*.pem
+*.key
+
+# =========================
+# IDE / Editor
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =========================
+# Logs
+# =========================
+*.log
+pip-log.txt
+pip-delete-this-directory.txt
+
+# =========================
+# Testing / coverage
+# =========================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.mypy_cache/
+.dmypy.json
+.pyre/
+
+# =========================
+# Jupyter
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# Database local files
+# =========================
+*.sqlite3
+*.db
+
+# =========================
+# Uploads / temp
+# =========================
+uploads/
+temp/
+tmp/
+*.tmp
+*.temp
+
+# =========================
+# Build artifacts
+# =========================
+build/
+dist/
+
+# =========================
+# Model checkpoints (OPTIONAL)
+# Keep these only if deploying via Docker image
+# Comment these if you WANT models in repo
+# =========================
+# *.pt
+# *.pth
+# *.h5
+# *.onnx
+
+# =========================
+# Misc
+# =========================
+results/
+.cache/
+
+# =========================
+# Git
+# =========================
+.git/

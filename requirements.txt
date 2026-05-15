@@ -1,0 +1,39 @@
+
+
+
+
+# Chat AI (Sarvam AI)
+openai==1.58.1             # For Sarvam AI integration
+
+# Database packages
+sqlalchemy==2.0.44
+psycopg2-binary==2.9.11
+alembic==1.17.2
+python-dotenv==1.2.1
+
+
+
+fastapi>=0.95.0
+uvicorn[standard]>=0.22.0
+tensorflow==2.20.0         # Required for sideview disease detection model
+numpy>=1.23.0
+pillow>=9.0.0
+scipy>=1.8.0
+matplotlib>=3.5.0
+
+
+ultralytics
+opencv-python-headless
+opencv-python
+numpy
+scikit-learn
+
+# PyTorch and related packages (for sideview disease detection)
+torch
+torchvision
+torchaudio
+segmentation-models-pytorch
+tqdm
+
+python-multipart
+httpx>=0.24.0              # For internal API calls in Deekshith orchestration
