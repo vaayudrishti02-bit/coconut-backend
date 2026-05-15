@@ -3,20 +3,6 @@ import sys
 import json
 
 import numpy as np
-import tensorflow as tf
-
-# Constrain TensorFlow memory usage to avoid OOM
-try:
-    physical_devices = tf.config.list_physical_devices('CPU')
-    # Can't easily limit CPU memory in tf directly, but we can set TF_FORCE_GPU_ALLOW_GROWTH for GPUs
-    os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
-except Exception:
-    pass
-
-from tensorflow.keras.applications import MobileNetV2
-from tensorflow.keras import layers, models
-from tensorflow.keras.preprocessing import image
-
 
 def load_labels(labels_path: str):
     with open(labels_path, "r", encoding="utf-8") as f:
@@ -24,8 +10,19 @@ def load_labels(labels_path: str):
     # keys are strings of indices; convert to int
     return {int(k): v for k, v in data.items()}
 
+def _lazy_load_tf():
+    import tensorflow as tf
+    try:
+        physical_devices = tf.config.list_physical_devices('CPU')
+        os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
+    except Exception:
+        pass
+    from tensorflow.keras.applications import MobileNetV2
+    from tensorflow.keras import layers, models
+    from tensorflow.keras.preprocessing import image
+    return tf, MobileNetV2, layers, models, image
 
-def build_model(num_classes: int):
+def build_model(num_classes: int, MobileNetV2, layers, models):
     base_model = MobileNetV2(
         input_shape=(224, 224, 3),
         include_top=False,
@@ -59,13 +56,8 @@ ALLOWED_DISEASES_BY_PART = {
     "stem": {"stem bleeding", "healthy"},
 }
 
-
 class TransferModelPredictor:
-    """Reusable predictor that wraps the transfer model for image-level inference.
-
-    This is used both by the CLI in this file and by the
-    video pipeline (scripts/video_to_phase2.py).
-    """
+    """Reusable predictor that wraps the transfer model for image-level inference."""
 
     def __init__(self, model_path: str = None, labels_path: str = None):
         script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -83,11 +75,14 @@ class TransferModelPredictor:
         self.model_path = model_path
         self.labels_path = labels_path
 
+        # Lazy load TF
+        tf, MobileNetV2, layers, models, self.image_module = _lazy_load_tf()
+
         # Load labels and build the model once
         self.index_to_class = load_labels(labels_path)
         num_classes = len(self.index_to_class)
 
-        self.model = build_model(num_classes)
+        self.model = build_model(num_classes, MobileNetV2, layers, models)
         self.model.load_weights(model_path)
 
     @staticmethod
@@ -126,22 +121,12 @@ class TransferModelPredictor:
         return rest.replace("_", " ")
 
     def predict(self, img_path: str, forced_part: str | None = None) -> dict:
-        """Run the transfer model on a single image path.
-
-        Returns a dict shaped for the phase2 / dashboard pipeline, with keys:
-        - predicted_index, predicted_label
-        - top2: list of top-2 predictions with confidences
-        - status: {prediction, confidence}
-        - part: {prediction, confidence}
-        - health: 'healthy' | 'unhealthy'
-        - combined: label string
-        - reliability: confidence (0-100)
-        - is_out_of_distribution: False (no OOD detection here)
-        """
+        """Run the transfer model on a single image path."""
         if not os.path.exists(img_path):
             raise FileNotFoundError(f"Image not found at {img_path}")
 
         # Load and preprocess image
+        image = self.image_module
         img = image.load_img(img_path, target_size=(224, 224))
         img_array = image.img_to_array(img) / 255.0
         img_array = np.expand_dims(img_array, axis=0)
