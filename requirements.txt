@@ -1,4 +1,4 @@
-# Chat AI (Sarvam AI)
+# Chat AI
 openai==1.58.1
 
 # Database
@@ -7,14 +7,13 @@ psycopg2-binary==2.9.11
 alembic==1.17.2
 python-dotenv==1.2.1
 
-# FastAPI backend
+# Backend
 fastapi>=0.95.0
 uvicorn[standard]>=0.22.0
 python-multipart
 httpx>=0.24.0
 
-# ML / AI
-tensorflow==2.20.0
+# Core scientific
 numpy>=1.23.0
 pillow>=9.0.0
 scipy>=1.8.0
@@ -22,12 +21,17 @@ matplotlib>=3.5.0
 scikit-learn
 tqdm
 
-# Computer Vision
-ultralytics
+# CV
 opencv-python-headless
+ultralytics
 
-# PyTorch
-torch
-torchvision
-torchaudio
+# TensorFlow CPU ONLY
+tensorflow-cpu==2.20.0
+
+# PyTorch CPU ONLY
+torch==2.3.1+cpu
+torchvision==0.18.1+cpu
+torchaudio==2.3.1+cpu
+
+# extra index for cpu wheels handled in docker
 segmentation-models-pytorch
