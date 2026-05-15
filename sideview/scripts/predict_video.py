@@ -154,6 +154,12 @@ class VideoSegmenter:
         with torch.no_grad():
             logits = self.model(tensor)
             pred = logits.argmax(dim=1).cpu().numpy()[0]
+            
+        # Free memory explicitly
+        del tensor
+        del logits
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         
         # Resize to original size
         pred = cv2.resize(pred.astype(np.uint8), (orig_w, orig_h), 
@@ -188,9 +194,19 @@ class VideoSegmenter:
         
         # Get video properties
         fps = cap.get(cv2.CAP_PROP_FPS)
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        orig_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        orig_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        
+        # Resize to safe max dimension to save RAM (e.g. 512)
+        safe_dim = 512
+        if max(orig_width, orig_height) > safe_dim:
+            scale = safe_dim / float(max(orig_width, orig_height))
+            width = int(orig_width * scale)
+            height = int(orig_height * scale)
+        else:
+            width = orig_width
+            height = orig_height
         
         # Calculate frame interval for target fps (default 2 fps)
         if frame_interval <= 0:
@@ -273,85 +289,93 @@ class VideoSegmenter:
         
         pbar = tqdm(total=frames_to_process, desc=f"Processing ({frames_to_process} frames @ {output_fps:.1f}fps)")
         
-        # Process only frames at target fps by seeking directly (much faster!)
-        for frame_idx in range(0, total_frames, frame_interval):
-            # Seek directly to the frame we need
-            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-            ret, frame_bgr = cap.read()
-            if not ret:
-                break
-            
-            frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-            
-            # Run model inference
-            raw_pred = self._inference(frame_rgb)
-            
-            # Apply smart postprocessing
-            filtered_pred, debug_info = smart_postprocess(raw_pred, frame_rgb.shape, debug=True)
-            
-            # Get main stem bbox for tracking
-            main_bbox = self._get_main_stem_bbox(filtered_pred, frame_rgb.shape)
-            
-            # Update tracker
-            if main_bbox is not None:
-                # Simple score: stem area
-                stem_area = (filtered_pred == 3).sum()
-                smoothed_bbox, accepted = self.tracker.update(main_bbox, float(stem_area))
+        try:
+            # Process only frames at target fps by seeking directly (much faster!)
+            for frame_idx in range(0, total_frames, frame_interval):
+                # Seek directly to the frame we need
+                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+                ret, frame_bgr = cap.read()
+                if not ret:
+                    break
                 
-                if accepted:
-                    results["tracking_stats"]["frames_tracked"] += 1
-                results["tracking_stats"]["frames_with_detection"] += 1
-            else:
-                smoothed_bbox, accepted = self.tracker.update(None, 0.0)
-            
-            # Create overlay and mask frames
-            overlay = self._create_overlay(frame_rgb, filtered_pred)
-            colored_mask = self._create_colored_mask_bgr(filtered_pred)
-            
-            # Draw tracking bbox if debug
-            if self.debug and smoothed_bbox is not None:
-                x1, y1, x2, y2 = smoothed_bbox
-                cv2.rectangle(overlay, (x1, y1), (x2, y2), (255, 255, 0), 2)
-                cv2.putText(overlay, f"F{frame_idx}", (x1, y1 - 10),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
-            
-            # Write to videos
-            overlay_writer.write(cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR))
-            mask_writer.write(colored_mask)
-            
-            # Log debug info
-            if self.debug:
-                debug_log.append({
-                    "frame": frame_idx,
-                    "focus_type": debug_info.get('focus_type', 'unknown'),
-                    "stem_detected": main_bbox is not None,
-                    "track_accepted": accepted,
-                    "stem_area": int((filtered_pred == 3).sum()),
-                    "leaf_area": int((filtered_pred == 2).sum()),
-                    "bud_area": int((filtered_pred == 1).sum())
-                })
-            
-            # Extract individual frames with class crops
-            frame_dir = frames_dir / f"frame_{frame_idx:06d}"
-            frame_results = self._save_frame_results(
-                frame_rgb, filtered_pred, frame_dir, frame_idx,
-                crop_size=crop_size, pad_bg=pad_bg
-            )
-            if frame_results["classes_found"]:
-                results["extracted_frames"].append(frame_results)
-                extracted_count += 1
-            
-            # Update aggregate stats
-            for cls, stats in frame_results.get("class_stats", {}).items():
-                results["aggregate_stats"][cls] += stats["pixel_count"]
-            
-            processed_count += 1
-            pbar.update(1)
-        
-        pbar.close()
-        cap.release()
-        overlay_writer.release()
-        mask_writer.release()
+                # Resize frame to save RAM
+                if (width, height) != (orig_width, orig_height):
+                    frame_bgr = cv2.resize(frame_bgr, (width, height))
+                
+                frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+                
+                # Run model inference
+                raw_pred = self._inference(frame_rgb)
+                
+                # Apply smart postprocessing
+                filtered_pred, debug_info = smart_postprocess(raw_pred, frame_rgb.shape, debug=True)
+                
+                # Get main stem bbox for tracking
+                main_bbox = self._get_main_stem_bbox(filtered_pred, frame_rgb.shape)
+                
+                # Update tracker
+                if main_bbox is not None:
+                    # Simple score: stem area
+                    stem_area = (filtered_pred == 3).sum()
+                    smoothed_bbox, accepted = self.tracker.update(main_bbox, float(stem_area))
+                    
+                    if accepted:
+                        results["tracking_stats"]["frames_tracked"] += 1
+                    results["tracking_stats"]["frames_with_detection"] += 1
+                else:
+                    smoothed_bbox, accepted = self.tracker.update(None, 0.0)
+                
+                # Create overlay and mask frames
+                overlay = self._create_overlay(frame_rgb, filtered_pred)
+                colored_mask = self._create_colored_mask_bgr(filtered_pred)
+                
+                # Draw tracking bbox if debug
+                if self.debug and smoothed_bbox is not None:
+                    x1, y1, x2, y2 = smoothed_bbox
+                    cv2.rectangle(overlay, (x1, y1), (x2, y2), (255, 255, 0), 2)
+                    cv2.putText(overlay, f"F{frame_idx}", (x1, y1 - 10),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
+                
+                # Write to videos
+                overlay_writer.write(cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR))
+                mask_writer.write(colored_mask)
+                
+                # Log debug info
+                if self.debug:
+                    debug_log.append({
+                        "frame": frame_idx,
+                        "focus_type": debug_info.get('focus_type', 'unknown'),
+                        "stem_detected": main_bbox is not None,
+                        "track_accepted": accepted,
+                        "stem_area": int((filtered_pred == 3).sum()),
+                        "leaf_area": int((filtered_pred == 2).sum()),
+                        "bud_area": int((filtered_pred == 1).sum())
+                    })
+                
+                # Extract individual frames with class crops
+                frame_dir = frames_dir / f"frame_{frame_idx:06d}"
+                frame_results = self._save_frame_results(
+                    frame_rgb, filtered_pred, frame_dir, frame_idx,
+                    crop_size=crop_size, pad_bg=pad_bg
+                )
+                if frame_results["classes_found"]:
+                    results["extracted_frames"].append(frame_results)
+                    extracted_count += 1
+                
+                # Update aggregate stats
+                for cls, stats in frame_results.get("class_stats", {}).items():
+                    results["aggregate_stats"][cls] += stats["pixel_count"]
+                
+                # Explicitly free memory here
+                del raw_pred, filtered_pred, frame_rgb, overlay, colored_mask, frame_bgr
+                
+                processed_count += 1
+                pbar.update(1)
+        finally:
+            pbar.close()
+            cap.release()
+            overlay_writer.release()
+            mask_writer.release()
         
         results["processed_frames"] = processed_count
         results["total_source_frames"] = total_frames

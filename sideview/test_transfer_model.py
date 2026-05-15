@@ -4,6 +4,15 @@ import json
 
 import numpy as np
 import tensorflow as tf
+
+# Constrain TensorFlow memory usage to avoid OOM
+try:
+    physical_devices = tf.config.list_physical_devices('CPU')
+    # Can't easily limit CPU memory in tf directly, but we can set TF_FORCE_GPU_ALLOW_GROWTH for GPUs
+    os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
+except Exception:
+    pass
+
 from tensorflow.keras.applications import MobileNetV2
 from tensorflow.keras import layers, models
 from tensorflow.keras.preprocessing import image

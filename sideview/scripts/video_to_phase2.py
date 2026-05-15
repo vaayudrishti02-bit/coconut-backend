@@ -33,22 +33,39 @@ if str(project_root) not in sys.path:
 
 from test_transfer_model import TransferModelPredictor
 
+_global_segmenter = None
+_global_predictor = None
+
+def get_segmenter(debug=False):
+    global _global_segmenter
+    if _global_segmenter is None:
+        _global_segmenter = VideoSegmenter(model_path=None, debug=debug)
+    elif debug != _global_segmenter.debug:
+        _global_segmenter.debug = debug
+    return _global_segmenter
+
+def get_predictor(phase2_model):
+    global _global_predictor
+    if _global_predictor is None:
+        _global_predictor = TransferModelPredictor(model_path=str(phase2_model))
+    return _global_predictor
+
 
 def run_pipeline(video_path, phase2_model, frame_interval=0, debug=False, output_json=None):
     video_path = Path(video_path)
     if not video_path.exists():
         raise FileNotFoundError(f"Video not found: {video_path}")
 
-    # 1) Run video segmentation
-    seg = VideoSegmenter(model_path=None, debug=debug)
+    # 1) Run video segmentation (use global instance to save memory)
+    seg = get_segmenter(debug=debug)
     print(f"Running segmentation on {video_path} ...")
     seg_result = seg.predict(str(video_path), frame_interval=frame_interval)
 
     output_dir = Path(seg_result.get('output_dir', '.'))
 
-    # 2) Load transfer model predictor
+    # 2) Load transfer model predictor (use global instance to save memory)
     print(f"Loading transfer model: {phase2_model}")
-    predictor = TransferModelPredictor(model_path=str(phase2_model))
+    predictor = get_predictor(phase2_model)
 
     predictions = []
 
